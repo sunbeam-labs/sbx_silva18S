@@ -7,7 +7,7 @@ CONDA_PREFIX = os.getenv("CONDA_PREFIX")
 
 rule _all_silva_r1:
     input:
-        expand(str(MAPPING_FP/'sbx_silva18S'/'vsearch_{id}_r1_aln_{idcut}_tophits'/'{sample}'),
+        expand(str(MAPPING_FP/'sbx_silva18S'/'vsearch_{id}_r1_aln_{idcut}_tophits'/'{sample}.vgout'),
                 sample=Samples.keys(), id=(0.9,), idcut=(0.9,))
 
 rule vsearch_silva_r1:
@@ -15,7 +15,7 @@ rule vsearch_silva_r1:
         fa= str(MAPPING_FP/'sbx_silva18S'/'R1'/'{sample}_1.fasta'),
         db = str(MAPPING_FP/'sbx_silva18S'/'databases'/'vsearch_{id}'/'SILVA_132_SSURef_Nr99_tax_silva_fungi.udb')
     output:
-        str(MAPPING_FP/'sbx_silva18S'/'vsearch_{id}_r1_aln_{idcut}_tophits'/'{sample}')
+        str(MAPPING_FP/'sbx_silva18S'/'vsearch_{id}_r1_aln_{idcut}_tophits'/'{sample}.vgout')
     threads:
         Cfg['sbx_silva18S']['threads']
     log:
