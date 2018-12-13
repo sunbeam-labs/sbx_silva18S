@@ -97,8 +97,8 @@ rule silva_fungal:
 # in opt/silva_databases.
 rule silva_download:
     output:
-        taxa = str(Path(CONDA_PREFIX)/"opt/silva_databases"/"taxmap_embl_ssu_ref_nr99_132.txt.gz"),
-        fasta = str(Path(CONDA_PREFIX)/"opt/silva_databases"/"SILVA_132_SSURef_Nr99_tax_silva.fasta.gz")
+        taxa = str(Path(CONDA_PREFIX)/"opt"/"silva_databases"/"taxmap_embl_ssu_ref_nr99_132.txt.gz"),
+        fasta = str(Path(CONDA_PREFIX)/"opt"/"silva_databases"/"SILVA_132_SSURef_Nr99_tax_silva.fasta.gz")
     shell:
         """
         set +o pipefail
