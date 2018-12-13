@@ -1,0 +1,167 @@
+# -*- mode: Snakemake -*-
+
+# The original Anaconda environment path is stored here so it can be referred to.
+from io import StringIO
+import os
+CONDA_PREFIX = os.getenv("CONDA_PREFIX")
+
+rule _all_silva_r1:
+    input:
+        expand(str(MAPPING_FP/'sbx_silva18S'/'vsearch_{id}_r1_aln_{idcut}_tophits'/'{sample}'),
+                sample=Samples.keys(), id=(0.9,), idcut=(0.9,))
+
+rule vsearch_silva_r1:
+    input:
+        fa= str(MAPPING_FP/'sbx_silva18S'/'R1'/'{sample}_1.fasta'),
+        db = str(MAPPING_FP/'sbx_silva18S'/'databases'/'vsearch_{id}'/'SILVA_132_SSURef_Nr99_tax_silva_fungi.udb')
+    output:
+        str(MAPPING_FP/'sbx_silva18S'/'vsearch_{id}_r1_aln_{idcut}_tophits'/'{sample}')
+    threads:
+        Cfg['sbx_silva18S']['threads']
+    log:
+        str(MAPPING_FP/'sbx_silva18S'/'log'/'vsearch_{id}_r1_aln_{idcut}_tophits/{sample}')
+    shell:
+        """
+        vsearch --usearch_global {input.fa} --id {wildcards.idcut} \
+           --db {input.db} --blast6out {output} \
+           --threads {threads} --top_hits_only 2> {log}
+        """
+
+## This is redundant with shortbred rules. At some time, we need to unify R1.fast
+rule fq_2_fa_silva:
+    input:
+        str(QC_FP/'decontam'/'{sample}_1.fastq.gz')
+    output:
+        str(MAPPING_FP/'sbx_silva18S'/'R1'/'{sample}_1.fasta')
+    shell:
+        """
+        vsearch --fastq_filter {input} -fastaout {output}
+        """
+
+rule _all_fungal_vdb:
+    input:
+        str(MAPPING_FP/'sbx_silva18S'/'databases'/'vsearch_0.9'/'SILVA_132_SSURef_Nr99_tax_silva_fungi.udb')
+
+rule build_fungal_vdb:
+    input:
+        str(MAPPING_FP/'sbx_silva18S'/'databases'/'vsearch_{id}'/'SILVA_132_SSURef_Nr99_tax_silva_fungi.fasta')
+    output:
+        str(MAPPING_FP/'sbx_silva18S'/'databases'/'vsearch_{id}'/'SILVA_132_SSURef_Nr99_tax_silva_fungi.udb')
+    shell:
+        """
+        vsearch --makeudb_usearch {input} --output {output}
+        """
+
+rule vsearch_cluster:
+    input:
+        str(MAPPING_FP/'sbx_silva18S'/'databases'/'SILVA_132_SSURef_Nr99_tax_silva_fungi_fixed.fasta')
+    output:
+        str(MAPPING_FP/'sbx_silva18S'/'databases'/'vsearch_{id}'/'SILVA_132_SSURef_Nr99_tax_silva_fungi.fasta')
+    shell:
+        """
+        vsearch --cluster_size {input} --centroids {output} --id {wildcards.id}
+        """
+
+rule _all_fungal_db:
+    input:  
+        str(MAPPING_FP/'sbx_silva18S'/'databases'/'SILVA_132_SSURef_Nr99_tax_silva_fungi_fixed.fasta')
+
+rule silva_fungal_fix:
+    input:
+        str(MAPPING_FP/'sbx_silva18S'/'databases'/'SILVA_132_SSURef_Nr99_tax_silva_fungi.fasta')
+    output:
+        str(MAPPING_FP/'sbx_silva18S'/'databases'/'SILVA_132_SSURef_Nr99_tax_silva_fungi_fixed.fasta')
+    run:
+        seqs = load_fasta(input[0])
+        with open(output[0], "w") as out:
+            write_fasta(out, seqs)
+
+# Get the fungal sequences from Silva database and symlink to it in the sbx_silva18S output dir.
+rule silva_fungal:
+    input:
+        taxa = str(Path(CONDA_PREFIX)/"opt/silva_databases"/"taxmap_embl_ssu_ref_nr99_132.txt.gz"),
+        fasta = str(Path(CONDA_PREFIX)/"opt/silva_databases"/"SILVA_132_SSURef_Nr99_tax_silva.fasta.gz")
+    output:
+        tmp = temp(str(Path(CONDA_PREFIX)/"opt/silva_databases"/"tmp.fasta")),
+        fungal = str(Path(CONDA_PREFIX)/"opt/silva_databases"/"SILVA_132_SSURef_Nr99_tax_silva_fungi.fasta"),
+        dbdir = str(MAPPING_FP/'sbx_silva18S'/'databases/SILVA_132_SSURef_Nr99_tax_silva_fungi.fasta')
+    shell:
+        """
+        zcat {input.taxa} | grep "Fungi;" | cut -f 1-3 | \
+            sed "s/\t/\./g" > {output.tmp} && \
+            seqtk subseq {input.fasta} {output.tmp} > {output.fungal}
+        cp {output.fungal} {output.dbdir}
+        """
+
+# Make sure to download the SILVA database and store it inside Sunbeam environment
+# in opt/silva_databases.
+rule silva_download:
+    output:
+        taxa = str(Path(CONDA_PREFIX)/"opt/silva_databases"/"taxmap_embl_ssu_ref_nr99_132.txt.gz"),
+        fasta = str(Path(CONDA_PREFIX)/"opt/silva_databases"/"SILVA_132_SSURef_Nr99_tax_silva.fasta.gz")
+    shell:
+        """
+        set +o pipefail
+
+        path_db={CONDA_PREFIX}/opt/silva_databases
+        mkdir -p $path_db
+
+        wget www.arb-silva.de/fileadmin/silva_databases/release_132/Exports/taxonomy/taxmap_embl_ssu_ref_nr99_132.txt.gz -P $path_db
+        wget www.arb-silva.de/fileadmin/silva_databases/release_132/Exports/SILVA_132_SSURef_Nr99_tax_silva.fasta.gz -P $path_db
+        """
+
+
+##### HELPER functions
+
+def parse_fasta(f, trim_desc=False):
+    """Parse a FASTA format file.
+    Parameters
+    ----------
+    f : File object or iterator returning lines in FASTA format.
+    Returns
+    -------
+    An iterator of tuples containing two strings
+        First string is the sequence description, second is the
+        sequence.
+    Notes
+    -----
+    This function removes whitespace in the sequence and translates
+    "U" to "T", in order to accommodate FASTA files downloaded from
+    SILVA and the Living Tree Project.
+    """
+    f = iter(f)
+    desc = next(f).strip()[1:]
+    if trim_desc:
+        desc = desc.split()[0]
+    seq = StringIO()
+    for line in f:
+        line = line.strip()
+        if line.startswith(">"):
+            yield desc, seq.getvalue()
+            desc = line[1:]
+            if trim_desc:
+                desc = desc.split()[0]
+            seq = StringIO()
+        else:
+            seq.write(line.replace(" ", "").replace("U", "T"))
+    yield desc, seq.getvalue()
+
+
+def write_fasta(f, seqs):
+    for desc, seq in seqs.items():
+        f.write(">{0}\n{1}\n".format(desc, seq))
+
+
+def load_fasta(filepath, trim_desc=True):
+    """Load all sequences from a FASTA file
+    Parameters
+    ----------
+    fasta_fp : Input filepath, FASTA format.
+    Returns
+    -------
+    A dictionary mapping sequence identifiers to sequences.
+    """
+    with open(filepath) as f:
+        seqs = parse_fasta(f, trim_desc=trim_desc)
+        return dict(seqs)
+
