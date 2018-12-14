@@ -7,19 +7,19 @@ CONDA_PREFIX = os.getenv("CONDA_PREFIX")
 
 rule _all_silva_r1:
     input:
-        expand(str(MAPPING_FP/'sbx_silva18S'/'vsearch_r1_aln_{idcut}_tophits'/'{sample}.vgout'),
-                sample=Samples.keys(), idcut=(0.9,))
+        expand(str(MAPPING_FP/'sbx_silva18S'/'vsearch_r1_{id}_aln_{idcut}_tophits'/'{sample}.vgout'),
+                sample=Samples.keys(), id=(0.9,), idcut=(0.9,))
 
 rule vsearch_silva_r1:
     input:
         fa= str(MAPPING_FP/'sbx_silva18S'/'R1'/'{sample}_1.fasta'),
-        db = str(MAPPING_FP/'sbx_silva18S'/'databases'/'SILVA_132_SSURef_Nr99_tax_silva_fungi_fixed.udb')
+        db = str(MAPPING_FP/'sbx_silva18S'/'databases'/'vsearch_{id}'/'SILVA_132_SSURef_Nr99_tax_silva_fungi.udb')
     output:
-        str(MAPPING_FP/'sbx_silva18S'/'vsearch_r1_aln_{idcut}_tophits'/'{sample}.vgout')
+        str(MAPPING_FP/'sbx_silva18S'/'vsearch_r1_{id}_aln_{idcut}_tophits'/'{sample}.vgout')
     threads:
         Cfg['sbx_silva18S']['threads']
     log:
-        str(MAPPING_FP/'sbx_silva18S'/'log'/'vsearch_r1_aln_{idcut}_tophits/{sample}.log')
+        str(MAPPING_FP/'sbx_silva18S'/'log'/'vsearch_r1_{id}_aln_{idcut}_tophits'/'{sample}.log')
     shell:
         """
         vsearch --usearch_global {input.fa} --id {wildcards.idcut} \
@@ -40,13 +40,13 @@ rule fq_2_fa_silva:
 
 rule _all_fungal_vdb:
     input:
-        str(MAPPING_FP/'sbx_silva18S'/'databases'/'SILVA_132_SSURef_Nr99_tax_silva_fungi_fixed.udb')
+        str(MAPPING_FP/'sbx_silva18S'/'databases'/'vsearch_{id}'/'SILVA_132_SSURef_Nr99_tax_silva_fungi.udb')
 
 rule build_fungal_vdb:
     input:
-        str(MAPPING_FP/'sbx_silva18S'/'databases'/'SILVA_132_SSURef_Nr99_tax_silva_fungi_fixed.fasta')
+        str(MAPPING_FP/'sbx_silva18S'/'databases'/'vsearch_{id}'/'SILVA_132_SSURef_Nr99_tax_silva_fungi.fasta')
     output:
-        str(MAPPING_FP/'sbx_silva18S'/'databases'/'SILVA_132_SSURef_Nr99_tax_silva_fungi_fixed.udb')
+        str(MAPPING_FP/'sbx_silva18S'/'databases'/'vsearch_{id}'/'SILVA_132_SSURef_Nr99_tax_silva_fungi.udb')
     shell:
         """
         vsearch --makeudb_usearch {input} --output {output}
